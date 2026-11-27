@@ -48,3 +48,8 @@ spec:
           readinessProbe: # 준비된 파드만 ALB 대상에 넣는다
             httpGet: { path: /readyz, port: http }
             periodSeconds: 5
+          # 종료 신호를 받아도 15초 동안 요청을 계속 받는다. 그 사이 ALB Controller가 이 파드를 대상에서 뺀다.
+          # 없으면 ALB가 이미 내려간 파드로 요청을 보내 축소, 배포 때 실패가 난다 (docs/10-gitops-monitoring.md 실측).
+          lifecycle:
+            preStop:
+              sleep: { seconds: 15 }
