@@ -12,4 +12,4 @@ resources:
 # 같은 층의 태그를 지운다. 층이 다르면 태그가 남는다 (README 참고).
 images:
   - name: app
-    newTag: "aa6c050" # 따옴표 필수. 1234567 같은 해시를 YAML이 숫자로 읽는다
+    newTag: "69507e4" # 따옴표 필수. 1234567 같은 해시를 YAML이 숫자로 읽는다
