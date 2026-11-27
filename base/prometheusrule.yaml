@@ -1,0 +1,44 @@
+# 골든 시그널 경보. namespace 라벨을 남겨야 Alertmanager가 Slack으로 보낸다 (namespace="saa-notes"만 Slack).
+# 상태 검사(/livez, /readyz)는 사용자 요청이 아니라서 오류율과 응답 시간 계산에서 뺀다.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: saa-notes
+spec:
+  groups:
+    - name: saa-notes.golden-signals
+      rules:
+        - alert: SaaNotesHighErrorRate # 오류
+          expr: |
+            sum by (namespace) (rate(http_server_requests_seconds_count{namespace="saa-notes", uri!~"/livez|/readyz", status=~"5.."}[5m]))
+              / sum by (namespace) (rate(http_server_requests_seconds_count{namespace="saa-notes", uri!~"/livez|/readyz"}[5m]))
+              > 0.05
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: "5xx 비율 {{ $value | humanizePercentage }} (기준 5%)"
+
+        - alert: SaaNotesHighLatency # 응답 시간
+          expr: |
+            histogram_quantile(0.95, sum by (namespace, le) (rate(http_server_requests_seconds_bucket{namespace="saa-notes", uri!~"/livez|/readyz"}[5m])))
+              > 1
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "p95 응답 시간 {{ $value | humanizeDuration }} (기준 1초)"
+
+        - alert: SaaNotesAtMaxReplicas # 포화도: HPA가 더 늘릴 수 없다
+          expr: |
+            kube_horizontalpodautoscaler_status_current_replicas{namespace="saa-notes"}
+              >= kube_horizontalpodautoscaler_spec_max_replicas{namespace="saa-notes"}
+          for: 3m
+          labels: { severity: warning }
+          annotations:
+            summary: "파드가 최대 {{ $value }}개에 도달. CPU 포화 상태"
+
+        - alert: SaaNotesDown # 요청을 받을 파드가 없다 (트래픽이 끊긴다)
+          expr: kube_deployment_status_replicas_available{namespace="saa-notes", deployment="saa-notes"} < 1
+          for: 1m
+          labels: { severity: critical }
+          annotations:
+            summary: "준비된 파드 0개"

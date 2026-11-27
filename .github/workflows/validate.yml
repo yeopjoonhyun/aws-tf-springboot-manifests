@@ -1,0 +1,14 @@
+# 매니페스트가 Kustomize로 펼쳐지는지 본다. CI가 태그를 바꾼 커밋도 검사한다.
+name: validate
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  kustomize:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: kubectl kustomize overlays/prod >/dev/null

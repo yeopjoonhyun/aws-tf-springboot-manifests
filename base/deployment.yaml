@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: saa-notes
+spec:
+  # replicas는 적지 않는다. 적으면 HPA가 늘린 개수를 Argo CD가 Git 값으로 되돌린다. 개수는 HPA(2~4개)가 정한다.
+  selector:
+    matchLabels: { app: saa-notes }
+  template:
+    metadata:
+      labels: { app: saa-notes }
+    spec:
+      # 두 AZ에 나눠 띄운다 (ECS의 availability_zone_rebalancing과 같은 목적)
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: { app: saa-notes }
+      containers:
+        - name: app
+          image: app # 태그는 kustomization.yaml, ECR 주소는 Argo CD Application이 채운다 (주소에 계정 번호가 있다)
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: metrics, containerPort: 8081 }
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod
+            # 관리용 주소(/actuator/*)를 8081로 옮긴다. Ingress는 8080만 내보내므로 지표가 인터넷에 열리지 않는다.
+            - name: MANAGEMENT_SERVER_PORT
+              value: "8081"
+            - name: MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
+              value: health,info,prometheus
+          envFrom:
+            - secretRef:
+                name: app-db # DB_HOST, DB_NAME, DB_USERNAME, DB_PASSWORD (인프라 레포의 k8s/deploy.sh가 만든다)
+          resources:
+            requests: { cpu: 250m, memory: 512Mi } # HPA의 CPU %는 requests 기준
+            limits: { memory: 768Mi } # CPU limit은 두지 않는다. JVM 기동이 느려진다
+          # /livez, /readyz 는 앱 포트(8080)에 열린다 (application.yml의 add-additional-paths)
+          startupProbe: # JVM 기동(40~80초)을 기다린다. 최대 3분
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 10
+          readinessProbe: # 준비된 파드만 ALB 대상에 넣는다
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5

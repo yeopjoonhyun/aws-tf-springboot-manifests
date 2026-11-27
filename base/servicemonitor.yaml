@@ -1,0 +1,12 @@
+# Prometheus가 앱 Service의 metrics 포트(8081)에서 지표를 읽어 가게 한다.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: saa-notes
+spec:
+  selector:
+    matchLabels: { app: saa-notes }
+  endpoints:
+    - port: metrics
+      path: /actuator/prometheus
+      interval: 15s
